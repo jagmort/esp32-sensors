@@ -21,7 +21,6 @@
 
 // drivers implemented by this example
 #include <drivers/shtc3.h>
-#include <drivers/pir.h>
 
 static const char *TAG = "app_main";
 
@@ -65,22 +64,6 @@ static void humidity_sensor_notification(uint16_t endpoint_id, float humidity, v
         val.val.u16 = static_cast<uint16_t>(humidity * 100);
 
         attribute::update(endpoint_id, RelativeHumidityMeasurement::Id, RelativeHumidityMeasurement::Attributes::MeasuredValue::Id, &val);
-    });
-}
-
-static void occupancy_sensor_notification(uint16_t endpoint_id, bool occupancy, void *user_data)
-{
-    // schedule the attribute update so that we can report it from matter thread
-    chip::DeviceLayer::SystemLayer().ScheduleLambda([endpoint_id, occupancy]() {
-        attribute_t * attribute = attribute::get(endpoint_id,
-                                                 OccupancySensing::Id,
-                                                 OccupancySensing::Attributes::Occupancy::Id);
-
-        esp_matter_attr_val_t val;
-        attribute::get_val(attribute, &val);
-        val.val.b = occupancy;
-
-        attribute::update(endpoint_id, OccupancySensing::Id, OccupancySensing::Attributes::Occupancy::Id, &val);
     });
 }
 
@@ -190,24 +173,6 @@ extern "C" void app_main()
     };
     err = shtc3_sensor_init(&shtc3_config);
     ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to initialize temperature sensor driver"));
-
-    // add the occupancy sensor
-    occupancy_sensor::config_t occupancy_sensor_config;
-    occupancy_sensor_config.occupancy_sensing.occupancy_sensor_type =
-        chip::to_underlying(OccupancySensing::OccupancySensorTypeEnum::kPir);
-    occupancy_sensor_config.occupancy_sensing.occupancy_sensor_type_bitmap =
-        chip::to_underlying(OccupancySensing::OccupancySensorTypeBitmap::kPir);
-
-    endpoint_t * occupancy_sensor_ep = occupancy_sensor::create(node, &occupancy_sensor_config, ENDPOINT_FLAG_NONE, NULL);
-    ABORT_APP_ON_FAILURE(occupancy_sensor_ep != nullptr, ESP_LOGE(TAG, "Failed to create occupancy_sensor endpoint"));
-
-    // initialize occupancy sensor driver (pir)
-    static pir_sensor_config_t pir_config = {
-        .cb = occupancy_sensor_notification,
-        .endpoint_id = endpoint::get_id(occupancy_sensor_ep),
-    };
-    err = pir_sensor_init(&pir_config);
-    ABORT_APP_ON_FAILURE(err == ESP_OK, ESP_LOGE(TAG, "Failed to initialize occupancy sensor driver"));
 
 #if CHIP_DEVICE_CONFIG_ENABLE_THREAD
     /* Set OpenThread platform config */
